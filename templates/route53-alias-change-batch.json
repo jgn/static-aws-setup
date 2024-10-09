@@ -1,0 +1,17 @@
+{
+  "Comment": "$COMMENT",
+  "Changes": [
+    {
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "$NAME",
+        "Type": "A",
+        "AliasTarget": {
+          "HostedZoneId": "$ROUTE53_HOSTED_ZONE_ID_FOR_CLOUDFRONT_ALIAS",
+          "DNSName": "$VALUE",
+          "EvaluateTargetHealth": false
+        }
+      }
+    }
+  ]
+}

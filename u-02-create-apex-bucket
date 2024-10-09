@@ -1,0 +1,97 @@
+#!/bin/bash
+
+# NOTE: Run the u-01-create-www-bucket script first so it's there for the redirect
+
+# set up apex (site with no subdomain)
+
+. ./config
+echo "setting up $APEX_BUCKET in $REGION"
+
+### Set up the bucket as a website
+aws s3 rm s3://$APEX_BUCKET --recursive
+aws s3 mb s3://$APEX_BUCKET --region $REGION
+# NOTE: At this point the redirect is to the www bucket, NOT to the CloudFront dist for www
+export REDIRECT_HOSTNAME=$WWW_BUCKET_HOSTNAME
+WEBSITE_CONFIGURATION="$(cat ./templates/apex-website-configuration.json | envsubst | tr -d '\n')"
+aws s3api put-bucket-website --cli-input-json "$WEBSITE_CONFIGURATION"
+aws s3api put-public-access-block --bucket $APEX_BUCKET --public-access-block-configuration '{ "BlockPublicAcls": false }'
+
+## Define redirects
+# We want all not-found (404) files to go to www.
+# Notice that while we have specific index.html as the index, since we have not uploaded it,
+# requests to / will go to www/
+# NOTE that the S3 redirect is a 301 (permanent)
+#
+BUCKET_POLICY="$(cat ./templates/bucket-policy.json | BUCKET=$APEX_BUCKET EFFECT=Allow envsubst | tr -d '\n')"
+aws s3api put-bucket-policy --bucket $APEX_BUCKET --policy "$BUCKET_POLICY"
+
+### Set folder and file are for the static page required by MDM
+# Comment-out this stuff if you don't have any need for static content on the apex
+#
+aws s3api put-object --bucket $APEX_BUCKET --key .well-known/ --content-length 0
+aws s3 cp ./assets/com.apple.remotemanagement s3://$APEX_BUCKET/.well-known/ --content-type application/json
+
+### Verify
+#
+echo "  verifying . . ."
+EXIT_CODE=0
+RESOURCE=$APEX_BUCKET_WEBSITE/.well-known/com.apple.remotemanagement
+
+# Is the config file there?
+if curl -s $RESOURCE | grep -q enroll; then
+    echo "    success: resource on apex is present"
+else
+    echo "    fail: resource on apex is NOT present"
+    EXIT_CODE=1
+fi
+
+# Is the config file's content type application/json?
+EXPECTED_CONTENT_TYPE=application/json
+CONTENT_TYPE=`curl -s -o /dev/null -w "%header{content-type}" $RESOURCE`
+if [[ "$CONTENT_TYPE" == "$EXPECTED_CONTENT_TYPE" ]]
+then
+    echo "    success: resource on apex has content-type $EXPECTED_CONTENT_TYPE"
+else
+    echo "    fail: resource on apex does NOT have content-type $EXPECTED_CONTENT_TYPE - it was $CONTENT_TYPE"
+    EXIT_CODE=1
+fi
+
+# Does the apex return a 301?
+EXPECTED_HTTP_STATUS_CODE=301
+HTTP_STATUS_CODE=`curl -s -o /dev/null -w "%{http_code}" $APEX_BUCKET_WEBSITE`
+if [[ "$HTTP_STATUS_CODE" == "$EXPECTED_HTTP_STATUS_CODE" ]]
+then
+    echo "    success: http status code is $HTTP_STATUS_CODE"
+else
+    echo "    fail: http status code is $HTTP_STATUS_CODE not the expected $EXPECTED_HTTP_STATUS_CODE"
+    EXIT_CODE=1
+fi
+
+# Is the domain redirected-to what we expect?
+# Note that in the next line we append a slash because the redirect puts that into the Location
+EXPECTED_URL_EFFECTIVE="$WWW_BUCKET_WEBSITE/"
+URL_EFFECTIVE=`curl -s -o /dev/null -w "%{url_effective}" -L $APEX_BUCKET_WEBSITE`
+if [[ "$URL_EFFECTIVE" == "$EXPECTED_URL_EFFECTIVE" ]]
+then
+    echo "    success: request to $APEX_BUCKET_WEBSITE redirected to $EXPECTED_URL_EFFECTIVE"
+else
+    echo "    fail: request to $APEX_BUCKET_WEBSITE NOT redirected to $EXPECTED_URL_EFFECTIVE"
+    EXIT_CODE=1
+fi
+
+# Does the redirect really work? (check body after redirect)
+EXPECTED_BODY=$WWW_BUCKET_INDEX_BODY
+BODY=`curl -s -L $APEX_BUCKET_WEBSITE`
+if [[ "$BODY" == "$EXPECTED_BODY" ]]
+then
+    echo "    success: correct body found at redirect"
+else
+    echo "    fail: incorrect body found at redirect"
+    EXIT_CODE=1
+fi
+
+if [[ $EXIT_CODE -ne 0 ]]
+then
+  echo "    There were errors"
+  exit $EXIT_CODE
+fi

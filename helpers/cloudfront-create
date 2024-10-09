@@ -1,0 +1,38 @@
+#!/bin/bash
+
+if [[ $# -eq 0 ]] ; then
+    echo "$0 <domain> <type> <alias> <origin_domain_name> <caller_reference>"
+    exit 0
+fi
+
+export DOMAIN=$1
+export TYPE=$2
+export ALIAS=$3
+export ORIGIN_DOMAIN_NAME=$4
+export CALLER_REFERENCE=$5
+echo "Creating distribution for $ALIAS pointing to $ORIGIN_DOMAIN_NAME"
+
+# NOTE that if there is a CNAME already pointing the alias to the domain name, it should be removed
+# TODO: Automate this or show a warning and exit
+
+### Get the certificate ARN
+#
+# TODO: Parameterize the domain for cert lookup ($WWW)
+export CERTIFICATE_ARN=`aws acm list-certificates | jq -r --arg DOMAIN "$DOMAIN" '.CertificateSummaryList[] | select(.DomainName==$DOMAIN).CertificateArn'`
+echo "  Certificate ARN: $CERTIFICATE_ARN"
+
+### Create the cloudfront distribution
+#
+CLOUDFRONT_DISTRIBUTION_CONFIG="$(cat $H/templates/cloudfront-distribution-config.json | envsubst | tr -d '\n')"
+DISTRIBUTION=`aws cloudfront create-distribution --cli-input-json "$CLOUDFRONT_DISTRIBUTION_CONFIG"`
+
+### Extract DomainName from the distribution details
+#
+DISTRIBUTION_DOMAIN_NAME=`echo $DISTRIBUTION | jq -r '.Distribution.DomainName'`
+echo "  CLoudFront distribution domain name: $DISTRIBUTION_DOMAIN_NAME"
+$H/helpers/route53-create $DOMAIN $TYPE $ALIAS $DISTRIBUTION_DOMAIN_NAME "Add $TYPE $ALIAS"
+
+# TODO: Wait for the distribution to finish deploying
+
+# Note that to delete the cert, you have to delete the CloudFront distribution first
+# Note that the distribution has to be disabled first (and wait for "Deploying" of that to complete); then you can delete

@@ -1,0 +1,49 @@
+#!/bin/bash
+
+. ./config
+
+# NOTE that there is no dependancy between the creation of the www and apex sites with the cert creation
+
+### Request the certificate and get DNS information
+#
+REQUEST_CERTIFICATE="$(cat ./templates/cert-request-certificate.json | envsubst | tr -d '\n')"
+ARN=`aws acm request-certificate --cli-input-json "$REQUEST_CERTIFICATE" --query "CertificateArn" --output text`
+CERTIFICATE=`aws acm describe-certificate --certificate-arn $ARN`
+
+### Wait for appearance of the resource records (which defines the DNS config)
+#
+APEX_DOMAIN_VALIDATION_RESOURCE_RECORD=`echo $CERTIFICATE | jq -r --arg APEX_NAME "$APEX_NAME" '.Certificate.DomainValidationOptions[] | select(.DomainName==$APEX_NAME).ResourceRecord.Name'`
+while [ "APEX_DOMAIN_VALIDATION_RESOURCE_RECORD" = "null" ]
+do
+  echo "Waiting 5s for certificate's apex resource record"
+  sleep 5
+  CERTIFICATE=`aws acm describe-certificate --certificate-arn $ARN`
+  APEX_DOMAIN_VALIDATION_RESOURCE_RECORD=`echo $CERTIFICATE | jq -r --arg APEX_NAME "$APEX_NAME" '.Certificate.DomainValidationOptions[] | select(.DomainName==$APEX_NAME).ResourceRecord.Name'`
+done
+WWW_DOMAIN_VALIDATION_RESOURCE_RECORD=`echo $CERTIFICATE | jq -r --arg WWW_NAME "$WWW_NAME" '.Certificate.DomainValidationOptions[] | select(.DomainName==$WWW_NAME).ResourceRecord.Name'`
+while [ "$WWW_DOMAIN_VALIDATION_RESOURCE_RECORD" = "null" ]
+do
+  echo "Waiting 5s for certificate's www resource record"
+  sleep 5
+  CERTIFICATE=`aws acm describe-certificate --certificate-arn $ARN`
+  WWW_DOMAIN_VALIDATION_RESOURCE_RECORD=`echo $CERTIFICATE | jq -r --arg WWW_NAME "$WWW_NAME" '.Certificate.DomainValidationOptions[] | select(.DomainName==$WWW_NAME).ResourceRecord.Name'`
+done
+
+APEX_DNS_NAME=`echo $CERTIFICATE | jq -r --arg APEX_NAME "$APEX_NAME" '.Certificate.DomainValidationOptions[] | select(.DomainName==$APEX_NAME).ResourceRecord.Name'`
+APEX_DNS_VALUE=`echo $CERTIFICATE | jq -r --arg APEX_NAME "$APEX_NAME" '.Certificate.DomainValidationOptions[] | select(.DomainName==$APEX_NAME).ResourceRecord.Value'`
+WWW_DNS_NAME=`echo $CERTIFICATE | jq -r --arg WWW_NAME "$WWW_NAME" '.Certificate.DomainValidationOptions[] | select(.DomainName==$WWW_NAME).ResourceRecord.Name'`
+WWW_DNS_VALUE=`echo $CERTIFICATE | jq -r --arg WWW_NAME "$WWW_NAME" '.Certificate.DomainValidationOptions[] | select(.DomainName==$WWW_NAME).ResourceRecord.Value'`
+
+### Create DNS information to validate the certification
+# NOTE: See the README: Before this, create the zone manually
+./helpers/route53-create $DOMAIN CNAME $APEX_DNS_NAME $APEX_DNS_VALUE "Add CNAME $APEX_DNS_NAME"
+./helpers/route53-create $DOMAIN CNAME $WWW_DNS_NAME  $WWW_DNS_VALUE  "Add CNAME $WWW_DNS_NAME"
+
+### Wait for the certificate to be issued
+#
+while [ "$CERTIFICATE_STATUS" != "ISSUED" ]
+do
+  echo "  Waiting 60s for the certificate to be issued and validated"
+  sleep 60
+  CERTIFICATE_STATUS=`aws acm describe-certificate --certificate-arn $ARN --query "Certificate.Status" --output text`
+done

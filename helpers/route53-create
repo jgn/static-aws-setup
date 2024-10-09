@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# examples
+#  ./route53-create explanation-by-pattern.com CNAME foo.explanation-by-pattern.com bar "test"
+#  ./route53-create explanation-by-pattern.com A foo.explanation-by-pattern.com 127.0.0.1 "test"
+
+if [[ $# -eq 0 ]] ; then
+    echo "$0 <zone_name> <type> <name> <value> <comment>"
+    exit 0
+fi
+
+export ZONE_NAME=$1
+export TYPE=$2
+export NAME=$3
+export VALUE=$4
+export COMMENT=$5
+echo -e "In Zone $ZONE_NAME,\n  type:    $TYPE\n  name:    $NAME\n  value:   $VALUE\n  comment: $COMMENT"
+
+ZONE_ID=`aws route53 list-hosted-zones-by-name --dns-name $ZONE_NAME --query "HostedZones[0].Id" --output text`
+if [ $TYPE = "ALIAS" ]
+then
+  CHANGE_BATCH="$(cat $H/templates/route53-alias-change-batch.json | envsubst | tr -d '\n')"
+else
+  CHANGE_BATCH="$(cat $H/templates/route53-change-batch.json | envsubst | tr -d '\n')"
+fi
+CHANGE_INFO=`aws route53 change-resource-record-sets --hosted-zone-id $ZONE_ID --change-batch "$CHANGE_BATCH"`
+CHANGE_INFO_ID=`echo $CHANGE_INFO | jq -r '.ChangeInfo.Id'`
+
+### Wait for the entries to be sync'd
+#
+while [ "$CHANGE_INFO_STATUS" != "INSYNC" ]
+do
+  echo "  Waiting 30s for DNS change for $NAME to be sync'd"
+  sleep 30
+  CHANGE_INFO_STATUS=`aws route53 get-change --id $CHANGE_INFO_ID --query "ChangeInfo.Status" --output text`
+done

@@ -1,0 +1,35 @@
+#!/bin/bash
+
+. ./config
+echo "setting up $WWW_BUCKET in $REGION"
+
+### set up www
+#
+aws s3 rm s3://$WWW_BUCKET --recursive
+aws s3 mb s3://$WWW_BUCKET
+aws s3 website s3://$WWW_BUCKET --index-document index.html --error-document error.html
+echo $WWW_BUCKET_INDEX_BODY | aws s3 cp - s3://$WWW_BUCKET/index.html --content-type "text/html"
+aws s3api put-public-access-block --bucket $WWW_BUCKET --public-access-block-configuration '{ "BlockPublicAcls": false }'
+BUCKET_POLICY="$(cat ./templates/bucket-policy.json | BUCKET=$WWW_BUCKET EFFECT=Allow envsubst | tr -d '\n')"
+aws s3api put-bucket-policy --bucket $WWW_BUCKET --policy "$BUCKET_POLICY"
+
+### Verify
+#
+EXIT_CODE=0
+
+# Do we have the expected output for the root?
+EXPECTED_BODY=$WWW_BUCKET_INDEX_BODY
+BODY=`curl -s $WWW_BUCKET_WEBSITE`
+if [[ "$BODY" == "$EXPECTED_BODY" ]]
+then
+    echo success: Have expected output at $WWW_BUCKET_WEBSITE
+else
+    echo fail: Wrong output - received $BODY
+    EXIT_CODE=1
+fi
+
+if [[ $EXIT_CODE -ne 0 ]]
+then
+  echo "There were errors"
+  exit $EXIT_CODE
+fi

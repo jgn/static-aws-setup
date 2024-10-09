@@ -1,0 +1,8 @@
+#!/bin/bash
+
+. ./config
+echo "deleting bucket $APEX_BUCKET in $REGION"
+
+### set up www bucket
+#
+aws s3 rm s3://$APEX_BUCKET --recursive

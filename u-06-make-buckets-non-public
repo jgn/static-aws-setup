@@ -1,0 +1,15 @@
+#!/bin/bash
+
+. ./config
+
+echo "Don't yet have the ability make buckets non-public"
+exit
+
+BUCKET_POLICY="$(cat ./templates/bucket-policy.json | BUCKET=$WWW_BUCKET EFFECT=Deny envsubst | tr -d '\n')"
+aws s3api put-bucket-policy --bucket $WWW_BUCKET --policy "$BUCKET_POLICY"
+
+BUCKET_POLICY="$(cat ./templates/bucket-policy.json | BUCKET=$APEX_BUCKET EFFECT=Deny envsubst | tr -d '\n')"
+aws s3api put-bucket-policy --bucket $APEX_BUCKET --policy "$BUCKET_POLICY"
+
+# aws s3api put-public-access-block --bucket $WWW --public-access-block-configuration '{ "BlockPublicAcls": true, "IgnorePublicAcls": true, "BlockPublicPolicy": true, "RestrictPublicBuckets": true }'
+# aws s3api put-public-access-block --bucket $APEX --public-access-block-configuration '{ "BlockPublicAcls": true, "IgnorePublicAcls": true, "BlockPublicPolicy": true, "RestrictPublicBuckets": true }'

@@ -1,0 +1,19 @@
+
+#!/bin/bash
+
+echo "Disable and delete by hand"
+exit
+
+. ./config
+
+DISTRIBUTION_ID=`aws cloudfront list-distributions | jq -r --arg APEX_HOSTNAME "$APEX_HOSTNAME" '.DistributionList.Items[] | select(.Origins.Items[].Id == $APEX_HOSTNAME) | .Id'`
+
+### (1) Disable
+#
+
+### (2) Delete
+#
+# aws cloudfront delete-distribution --id $DISTRIBUTION_ID
+
+### (3) Delete Route53 DNS entries
+#

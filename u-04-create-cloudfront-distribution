@@ -1,0 +1,3 @@
+. ./config
+./helpers/cloudfront-create $DOMAIN CNAME $WWW_NAME  $WWW_BUCKET_HOSTNAME  5
+./helpers/cloudfront-create $DOMAIN ALIAS $APEX_NAME $APEX_BUCKET_HOSTNAME 6

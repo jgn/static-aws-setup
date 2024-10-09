@@ -1,0 +1,30 @@
+#!/bin/bash
+
+. ./config
+
+# NOTE: Might want the redirect to be a 302 not a 301 (https://www.vividbytes.io/fixing-redirect-codes-on-static-s3-websites/)
+# Also try to understand the difference (mentioned in that blog post) for redirects and paths ending w/ / and w/o
+
+export REDIRECT_HOSTNAME=$WWW_NAME
+WEBSITE_CONFIGURATION="$(cat ./templates/apex-website-configuration.json | envsubst | tr -d '\n')"
+aws s3api put-bucket-website --cli-input-json "$WEBSITE_CONFIGURATION"
+
+# TODO: Invalidate the cache
+# NOTE: Invalidate the cache manually
+
+# Is the domain redirected-to what we expect?
+# Note that in the next line we append a slash because the redirect puts that into the Location
+EXPECTED_URL_EFFECTIVE="$WWW_WEBSITE/"
+URL_EFFECTIVE=`curl -s -o /dev/null -w "%{url_effective}" -L $APEX_WEBSITE`
+if [[ "$URL_EFFECTIVE" == "$EXPECTED_URL_EFFECTIVE" ]]
+then
+    echo "    success: request to $APEX_WEBSITE redirected to $EXPECTED_URL_EFFECTIVE"
+else
+    echo "    fail: request to $APEX_WEBSITE NOT redirected to $EXPECTED_URL_EFFECTIVE"
+    EXIT_CODE=1
+fi
+
+### Apparently you do NOT have to invalidate CloudFront for this, but here's a start
+#
+# DISTRIBUTION_ID=`cat ./temp/list-distributions.json | jq -r --arg APEX_HOSTNAME "$APEX_HOSTNAME" '.DistributionList.Items[] | select(.Origins.Items[].Id == $APEX_HOSTNAME) | .Id'`
+# aws create-invalidation --distribution-id $DISTRIBUTION_ID

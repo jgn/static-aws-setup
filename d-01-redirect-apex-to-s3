@@ -1,0 +1,7 @@
+#!/bin/bash
+
+. ./config
+
+export REDIRECT_HOSTNAME=$WWW_BUCKET_HOSTNAME
+WEBSITE_CONFIGURATION="$(cat ./apex-website-configuration.json | envsubst | tr -d '\n')"
+aws s3api put-bucket-website --cli-input-json "$WEBSITE_CONFIGURATION"

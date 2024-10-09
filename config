@@ -1,0 +1,40 @@
+#!/bin/bash
+
+export REGION=us-east-1
+export DOMAIN=3abm581.com
+
+##### Shouldn't need to change anything else
+
+export DNS_NAME=$DOMAIN.
+
+### These are used by the Cloudfront distribution
+#
+export WWW_NAME=www.$DOMAIN
+export WWW_WEBSITE=https://$WWW_NAME
+
+export APEX_NAME=$DOMAIN
+export APEX_WEBSITE=https://$APEX_NAME
+
+### There is nothing special about the bucket names, and you could, if you wanted, replace the
+# ones here, which are based on the domain name, with something more random
+#
+export WWW_BUCKET=$WWW_NAME
+export WWW_BUCKET_HOSTNAME=$WWW_BUCKET.s3-website.$REGION.amazonaws.com
+export WWW_BUCKET_WEBSITE=http://$WWW_BUCKET_HOSTNAME
+export WWW_BUCKET_INDEX_BODY="index of $WWW_BUCKET_WEBSITE"
+
+export APEX_BUCKET=$APEX_NAME
+export APEX_BUCKET_HOSTNAME=$APEX_BUCKET.s3-website.$REGION.amazonaws.com
+export APEX_BUCKET_WEBSITE=http://$APEX_BUCKET_HOSTNAME
+
+# The following is the canned cache policy recommended for S3
+# See https://us-east-1.console.aws.amazon.com/cloudfront/v4/home?region=us-east-1#/policies/cache/658327ea-f89d-4fab-a63d-7e88639e58f6
+export CACHE_POLICY_ID=658327ea-f89d-4fab-a63d-7e88639e58f6
+
+# Notice that in route53-alias-change-batch.json, then given zone id is: Z2FDTNDATAQYW2
+# For explanations, see https://stackoverflow.com/a/39669786 and https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-route53-recordsetgroup-aliastarget.html
+# This is used in route53-alias-change-batch.json
+export ROUTE53_HOSTED_ZONE_ID_FOR_CLOUDFRONT_ALIAS=Z2FDTNDATAQYW2
+
+# Keep track of this dir so the helpers can use it
+export H="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"

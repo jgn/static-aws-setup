@@ -1,0 +1,12 @@
+{
+    "DomainName": "${DOMAIN}",
+    "ValidationMethod": "DNS",
+    "SubjectAlternativeNames": [
+        "${WWW_NAME}"
+    ],
+    "IdempotencyToken": "1",
+    "Options": {
+        "CertificateTransparencyLoggingPreference": "ENABLED"
+    },
+    "KeyAlgorithm": "RSA_2048"
+}

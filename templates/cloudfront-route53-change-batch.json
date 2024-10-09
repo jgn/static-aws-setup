@@ -1,0 +1,18 @@
+{
+  "Comment": "Upsert CNAME from $DNS_NAME to $DNS_VALUE",
+  "Changes": [
+      {
+          "Action": "UPSERT",
+          "ResourceRecordSet": {
+              "Name": "$DNS_NAME",
+              "Type": "CNAME",
+              "TTL": 300,
+              "ResourceRecords": [
+                  {
+                      "Value": "$DNS_VALUE"
+                  }
+              ]
+          }
+      }
+  ]
+}
